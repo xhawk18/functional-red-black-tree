@@ -5,25 +5,27 @@ module.exports = createRBTree
 var RED   = 0
 var BLACK = 1
 
-function RBNode(color, key, value, left, right, count) {
+function RBNode(color, key, value, left, right, count, size) {
   this._color = color
   this.key = key
   this.value = value
   this.left = left
   this.right = right
   this._count = count
+  this._size = size
 }
 
 function cloneNode(node) {
-  return new RBNode(node._color, node.key, node.value, node.left, node.right, node._count)
+  return new RBNode(node._color, node.key, node.value, node.left, node.right, node._count, node._size)
 }
 
 function repaint(color, node) {
-  return new RBNode(color, node.key, node.value, node.left, node.right, node._count)
+  return new RBNode(color, node.key, node.value, node.left, node.right, node._count, node._size)
 }
 
 function recount(node) {
   node._count = 1 + (node.left ? node.left._count : 0) + (node.right ? node.right._count : 0)
+  node._size = node.value.size + (node.left ? node.left._size : 0) + (node.right ? node.right._size : 0);
 }
 
 function RedBlackTree(compare, root) {
@@ -63,6 +65,63 @@ Object.defineProperty(proto, "length", {
   }
 })
 
+//Returns the number of elements in multi-nodes in the tree
+Object.defineProperty(proto, "size", {
+  get: function() {
+    if(this.root) {
+      return this.root._size
+    }
+    return 0
+  }
+})
+
+
+//Insert a new item into the tree
+proto.dump = function() {
+  function check(n) {
+      if(!n) return;
+      
+      check(n.left);
+      check(n.right);
+
+      if(n._size !== (n.left ? n.left._size : 0) + (n.right ? n.right._size : 0) + n.value.size){
+          console.log(`xxxxxx size error, key = ${n.key}`, n._size, (n.left ? n.left._size : 0),  (n.right ? n.right._size : 0) , n.value.size);
+          throw new Error('xxxxxx');
+      }
+  }
+
+  let layers = [];
+  function dump(layer, n) {
+      if(!n) return;
+      
+      if(layers[layer] === undefined)
+          layers[layer] = [];
+      layers[layer].push(n);
+      
+      dump(layer + 1, n.left);
+      dump(layer + 1, n.right);
+  }
+  //dump(0, this.root);
+  
+  for(let i = 0; i < layers.length; ++i) {
+      let layer = layers[i];
+      
+      let s = '';
+      for(let j = 0; j < layer.length; ++j) {
+        let keys = [layer[j].key];
+        layer[j].left && keys.push(layer[j].left.key);
+        layer[j].right && keys.push(layer[j].right.key);
+        let values = Array.from(layer[j].value).join(',');
+        s += `[${keys.join(',')}]=${layer[j]._size}=${values} `;
+      }
+      console.log(s);
+  }
+
+
+  check(this.root);
+}
+
+
 //Insert a new item into the tree
 proto.insert = function(key, value) {
   var cmp = this._compare
@@ -81,13 +140,13 @@ proto.insert = function(key, value) {
     }
   }
   //Rebuild path to leaf node
-  n_stack.push(new RBNode(RED, key, value, null, null, 1))
+  n_stack.push(new RBNode(RED, key, value, null, null, 1, value.size))
   for(var s=n_stack.length-2; s>=0; --s) {
     var n = n_stack[s]
     if(d_stack[s] <= 0) {
-      n_stack[s] = new RBNode(n._color, n.key, n.value, n_stack[s+1], n.right, n._count+1)
+      n_stack[s] = new RBNode(n._color, n.key, n.value, n_stack[s+1], n.right, n._count+1, n._size+value.size)
     } else {
-      n_stack[s] = new RBNode(n._color, n.key, n.value, n.left, n_stack[s+1], n._count+1)
+      n_stack[s] = new RBNode(n._color, n.key, n.value, n.left, n_stack[s+1], n._count+1, n._size+value.size)
     }
   }
   //Rebalance tree using rotations
@@ -359,6 +418,39 @@ proto.at = function(idx) {
   return new RedBlackTreeIterator(this, [])
 }
 
+//Find the ith multivalue item in the tree
+proto.mat = function(idx) {
+  if(idx < 0) {
+    return new RedBlackTreeIterator(this, [])
+  }
+  var n = this.root
+  var stack = []
+  while(true) {
+    stack.push(n)
+    if(n.left) {
+      if(idx < n.left._size) {
+        n = n.left
+        continue
+      }
+      idx -= n.left._size
+    }
+    if(!idx) {
+      return new RedBlackTreeIterator(this, stack)
+    }
+    idx -= n.value.size
+    if(n.right) {
+      if(idx >= n.right._size) {
+        break
+      }
+      n = n.right
+    } else {
+      break
+    }
+  }
+  return new RedBlackTreeIterator(this, [])
+}
+
+
 proto.ge = function(key) {
   var cmp = this._compare
   var n = this.root
@@ -529,6 +621,7 @@ function swapNode(n, v) {
   n.right = v.right
   n._color = v._color
   n._count = v._count
+  n._size = v._size
 }
 
 //Fix up a double black node in a tree
@@ -733,14 +826,18 @@ iproto.remove = function() {
   //First copy path to node
   var cstack = new Array(stack.length)
   var n = stack[stack.length-1]
-  cstack[cstack.length-1] = new RBNode(n._color, n.key, n.value, n.left, n.right, n._count)
+  cstack[cstack.length-1] = new RBNode(n._color, n.key, n.value, n.left, n.right, n._count, n._size)
   for(var i=stack.length-2; i>=0; --i) {
     var n = stack[i]
     if(n.left === stack[i+1]) {
-      cstack[i] = new RBNode(n._color, n.key, n.value, cstack[i+1], n.right, n._count)
+      cstack[i] = new RBNode(n._color, n.key, n.value, cstack[i+1], n.right, n._count, n._size)
     } else {
-      cstack[i] = new RBNode(n._color, n.key, n.value, n.left, cstack[i+1], n._count)
+      cstack[i] = new RBNode(n._color, n.key, n.value, n.left, cstack[i+1], n._count, n._size)
     }
+  }
+  
+  for(let i = 0; i < cstack.length; ++i) {
+    let n = cstack[i];
   }
 
   //Get node
@@ -760,14 +857,15 @@ iproto.remove = function() {
     }
     //Copy path to leaf
     var v = cstack[split-1]
-    cstack.push(new RBNode(n._color, v.key, v.value, n.left, n.right, n._count))
+    cstack.push(new RBNode(n._color, v.key, v.value, n.left, n.right, n._count, n._size + v.value.size - n.value.size))
     cstack[split-1].key = n.key
     cstack[split-1].value = n.value
+    cstack[split-1]._size = cstack[split-1]._size + n._size - cstack[split-1].value.size;
 
     //Fix up stack
     for(var i=cstack.length-2; i>=split; --i) {
       n = cstack[i]
-      cstack[i] = new RBNode(n._color, n.key, n.value, n.left, cstack[i+1], n._count)
+      cstack[i] = new RBNode(n._color, n.key, n.value, n.left, cstack[i+1], n._count, n._size + cstack[i+1]._size - (n.right ? n.right._size : 0));
     }
     cstack[split-1].left = cstack[split]
   }
@@ -787,12 +885,14 @@ iproto.remove = function() {
     cstack.pop()
     for(var i=0; i<cstack.length; ++i) {
       cstack[i]._count--
+      cstack[i]._size -= n.value.size
     }
     return new RedBlackTree(this.tree._compare, cstack[0])
   } else {
     if(n.left || n.right) {
       //Second easy case:  Single child black parent
       //console.log("BLACK single child")
+      var n_value_size = n.value.size;
       if(n.left) {
         swapNode(n, n.left)
       } else if(n.right) {
@@ -802,6 +902,7 @@ iproto.remove = function() {
       n._color = BLACK
       for(var i=0; i<cstack.length-1; ++i) {
         cstack[i]._count--
+        cstack[i]._size -= n_value_size;
       }
       return new RedBlackTree(this.tree._compare, cstack[0])
     } else if(cstack.length === 1) {
@@ -813,6 +914,7 @@ iproto.remove = function() {
       //console.log("BLACK leaf no children")
       for(var i=0; i<cstack.length; ++i) {
         cstack[i]._count--
+        cstack[i]._size -= n._size
       }
       var parent = cstack[cstack.length-2]
       fixDoubleBlack(cstack)
@@ -877,6 +979,33 @@ Object.defineProperty(iproto, "index", {
   enumerable: true
 })
 
+//Returns the position of this multiple iterator in the sorted list
+Object.defineProperty(iproto, "mindex", {
+  get: function() {
+    var idx = 0
+    var stack = this._stack
+    if(stack.length === 0) {
+      var r = this.tree.root
+      if(r) {
+        return r._size
+      }
+      return 0
+    } else if(stack[stack.length-1].left) {
+      idx = stack[stack.length-1].left._size
+    }
+    for(var s=stack.length-2; s>=0; --s) {
+      if(stack[s+1] === stack[s].right) {
+        ++idx
+        if(stack[s].left) {
+          idx += stack[s].left._size
+        }
+      }
+    }
+    return idx
+  },
+  enumerable: true
+})
+
 //Advances iterator to next element in list
 iproto.next = function() {
   var stack = this._stack
@@ -926,13 +1055,14 @@ iproto.update = function(value) {
   }
   var cstack = new Array(stack.length)
   var n = stack[stack.length-1]
-  cstack[cstack.length-1] = new RBNode(n._color, n.key, value, n.left, n.right, n._count)
+  var size = value.size - n.value.size;
+  cstack[cstack.length-1] = new RBNode(n._color, n.key, value, n.left, n.right, n._count, n._size + size)
   for(var i=stack.length-2; i>=0; --i) {
     n = stack[i]
     if(n.left === stack[i+1]) {
-      cstack[i] = new RBNode(n._color, n.key, n.value, cstack[i+1], n.right, n._count)
+      cstack[i] = new RBNode(n._color, n.key, n.value, cstack[i+1], n.right, n._count, n._size + size)
     } else {
-      cstack[i] = new RBNode(n._color, n.key, n.value, n.left, cstack[i+1], n._count)
+      cstack[i] = new RBNode(n._color, n.key, n.value, n.left, cstack[i+1], n._count, n._size + size)
     }
   }
   return new RedBlackTree(this.tree._compare, cstack[0])
