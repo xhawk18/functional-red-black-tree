@@ -76,7 +76,7 @@ Object.defineProperty(proto, "size", {
 })
 
 
-//Insert a new item into the tree
+//Dump the tree
 proto.dump = function() {
   function check(n) {
       if(!n) return;

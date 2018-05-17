@@ -52,48 +52,20 @@ Object.defineProperty(proto, "length", {
 })
 
 //Insert a new item into the tree
-  if(idx < 0) {
-    return new RedBlackTreeIterator(this, [])
-  }
-  var n = this.root
-  var stack = []
-  while(true) {
-    stack.push(n)
-    if(n.left) {
-      if(idx < n.left._count) {
-        n = n.left
-        continue
-      }
-      idx -= n.left._count
-    }
-    if(!idx) {
-      return new RedBlackTreeIterator(this, stack)
-    }
-    idx -= 1
-    if(n.right) {
-      if(idx >= n.right._count) {
-        break
-      }
-      n = n.right
-    } else {
-      break
-    }
-  }
-  return new RedBlackTreeIterator(this, [])
-
 proto.insert = function(idx, value) {
   //Find point to insert new node at
   var n = this.root
   var n_stack = []
   var d_stack = []
   while(n) {
-    var d = idx - n._count;
+    var d = idx - (n.left ? n.left._count : 0);
 
     n_stack.push(n)
     d_stack.push(d)
     if(d <= 0) {
       n = n.left
     } else {
+      idx = d - 1;
       n = n.right
     }
   }
@@ -108,7 +80,7 @@ proto.insert = function(idx, value) {
     }
   }
   //Rebalance tree using rotations
-  //console.log("start insert", key, d_stack)
+  //console.log("start insert", idx, d_stack)
   for(var s=n_stack.length-1; s>1; --s) {
     var p = n_stack[s-1]
     var n = n_stack[s]
@@ -181,7 +153,7 @@ proto.insert = function(idx, value) {
       if(p.right === n) {
         var y = pp.left
         if(y && y._color === RED) {
-          //console.log("RRr", y.key)
+          //console.log("RRr", y._count)
           p._color = BLACK
           pp.left = repaint(BLACK, y)
           pp._color = RED
@@ -242,7 +214,7 @@ proto.insert = function(idx, value) {
   }
   //Return new tree
   n_stack[0]._color = BLACK
-  return new RedBlackTree(cmp, n_stack[0])
+  return new RedBlackTree(n_stack[0])
 }
 
 
@@ -252,7 +224,7 @@ function doVisitFull(visit, node) {
     var v = doVisitFull(visit, node.left)
     if(v) { return v }
   }
-  var v = visit(node.key, node.value)
+  var v = visit(node.value)
   if(v) { return v }
   if(node.right) {
     return doVisitFull(visit, node.right)
@@ -260,38 +232,38 @@ function doVisitFull(visit, node) {
 }
 
 //Visit half nodes in order
-function doVisitHalf(lo, compare, visit, node) {
-  var l = compare(lo, node.key)
+function doVisitHalf(left_count, lo, visit, node) {
+  var l = lo - node._count;
   if(l <= 0) {
     if(node.left) {
-      var v = doVisitHalf(lo, compare, visit, node.left)
+      var v = doVisitHalf(left_count, lo, visit, node.left)
       if(v) { return v }
     }
-    var v = visit(node.key, node.value)
+    var v = visit(node.value)
     if(v) { return v }
   }
   if(node.right) {
-    return doVisitHalf(lo, compare, visit, node.right)
+    return doVisitHalf(left_count + node._count - node.right._count, lo, visit, node.right)
   }
 }
 
 //Visit all nodes within a range
-function doVisit(lo, hi, compare, visit, node) {
-  var l = compare(lo, node.key)
-  var h = compare(hi, node.key)
+function doVisit(left_count, lo, hi, visit, node) {
+  var l = lo - node._count - left_count;
+  var h = hi - node._count - left_count;
   var v
   if(l <= 0) {
     if(node.left) {
-      v = doVisit(lo, hi, compare, visit, node.left)
+      v = doVisit(left_count, lo, hi, visit, node.left)
       if(v) { return v }
     }
     if(h > 0) {
-      v = visit(node.key, node.value)
+      v = visit(node.value)
       if(v) { return v }
     }
   }
   if(h > 0 && node.right) {
-    return doVisit(lo, hi, compare, visit, node.right)
+    return doVisit(left_count + node._count - node.right._count, lo, hi, visit, node.right)
   }
 }
 
@@ -306,14 +278,14 @@ proto.forEach = function rbTreeForEach(visit, lo, hi) {
     break
 
     case 2:
-      return doVisitHalf(lo, this._compare, visit, this.root)
+      return doVisitHalf(0, lo, visit, this.root)
     break
 
     case 3:
-      if(this._compare(lo, hi) >= 0) {
+      if(lo >= hi) {
         return
       }
-      return doVisit(lo, hi, this._compare, visit, this.root)
+      return doVisit(0, lo, hi, visit, this.root)
     break
   }
 }
@@ -376,135 +348,13 @@ proto.at = function(idx) {
   return new RedBlackTreeIterator(this, [])
 }
 
-proto.ge = function(idx) {
-  var cmp = this._compare
-  var n = this.root
-  var stack = []
-  var last_ptr = 0
-  while(n) {
-    var d = idx - n._count;
-    stack.push(n)
-    if(d <= 0) {
-      last_ptr = stack.length
-    }
-    if(d <= 0) {
-      n = n.left
-    } else {
-      n = n.right
-    }
-  }
-  stack.length = last_ptr
-  return new RedBlackTreeIterator(this, stack)
-}
-
-proto.gt = function(idx) {
-  var cmp = this._compare
-  var n = this.root
-  var stack = []
-  var last_ptr = 0
-  while(n) {
-    var d = idx - n._count;
-    stack.push(n)
-    if(d < 0) {
-      last_ptr = stack.length
-    }
-    if(d < 0) {
-      n = n.left
-    } else {
-      n = n.right
-    }
-  }
-  stack.length = last_ptr
-  return new RedBlackTreeIterator(this, stack)
-}
-
-proto.lt = function(idx) {
-  var cmp = this._compare
-  var n = this.root
-  var stack = []
-  var last_ptr = 0
-  while(n) {
-    var d = idx - n._count;
-    stack.push(n)
-    if(d > 0) {
-      last_ptr = stack.length
-    }
-    if(d <= 0) {
-      n = n.left
-    } else {
-      n = n.right
-    }
-  }
-  stack.length = last_ptr
-  return new RedBlackTreeIterator(this, stack)
-}
-
-proto.le = function(idx) {
-  var cmp = this._compare
-  var n = this.root
-  var stack = []
-  var last_ptr = 0
-  while(n) {
-    var d = idx - n._count;
-    stack.push(n)
-    if(d >= 0) {
-      last_ptr = stack.length
-    }
-    if(d < 0) {
-      n = n.left
-    } else {
-      n = n.right
-    }
-  }
-  stack.length = last_ptr
-  return new RedBlackTreeIterator(this, stack)
-}
-
-//Finds the item with key if it exists
-proto.find = function(idx) {
-  var cmp = this._compare
-  var n = this.root
-  var stack = []
-  while(n) {
-    var d = key - n._count;
-    stack.push(n)
-    if(d === 0) {
-      return new RedBlackTreeIterator(this, stack)
-    }
-    if(d <= 0) {
-      n = n.left
-    } else {
-      n = n.right
-    }
-  }
-  return new RedBlackTreeIterator(this, [])
-}
-
-//Removes item with key from tree
+//Removes item at idx from tree
 proto.remove = function(idx) {
-  var iter = this.find(idx)
-  if(iter) {
+  var iter = this.at(idx)
+  if(iter.valid) {
     return iter.remove()
   }
   return this
-}
-
-//Returns the item at `key`
-proto.get = function(idx) {
-  var cmp = this._compare
-  var n = this.root
-  while(n) {
-    var d = idx - n._count;
-    if(d === 0) {
-      return n.value
-    }
-    if(d <= 0) {
-      n = n.left
-    } else {
-      n = n.right
-    }
-  }
-  return
 }
 
 //Iterator for red black tree
@@ -556,7 +406,7 @@ function fixDoubleBlack(stack) {
       n._color = BLACK
       return
     }
-    //console.log("visit node:", n.key, i, stack[i].key, stack[i-1].key)
+    //console.log("visit node:", n._count, i, stack[i]._count, stack[i-1]._count)
     p = stack[i-1]
     if(p.left === n) {
       //console.log("left child")
@@ -803,7 +653,7 @@ iproto.remove = function() {
     for(var i=0; i<cstack.length; ++i) {
       cstack[i]._count--
     }
-    return new RedBlackTree(this.tree._compare, cstack[0])
+    return new RedBlackTree(cstack[0])
   } else {
     if(n.left || n.right) {
       //Second easy case:  Single child black parent
@@ -818,11 +668,11 @@ iproto.remove = function() {
       for(var i=0; i<cstack.length-1; ++i) {
         cstack[i]._count--
       }
-      return new RedBlackTree(this.tree._compare, cstack[0])
+      return new RedBlackTree(cstack[0])
     } else if(cstack.length === 1) {
       //Third easy case: root
       //console.log("ROOT")
-      return new RedBlackTree(this.tree._compare, null)
+      return new RedBlackTree(null)
     } else {
       //Hard case: Repaint n, and then do some nasty stuff
       //console.log("BLACK leaf no children")
@@ -839,14 +689,26 @@ iproto.remove = function() {
       }
     }
   }
-  return new RedBlackTree(this.tree._compare, cstack[0])
+  return new RedBlackTree(cstack[0])
 }
 
-//Returns key
+//Returns idx
 Object.defineProperty(iproto, "idx", {
   get: function() {
     if(this._stack.length > 0) {
-      return this._stack[this._stack.length-1].idx  //todo
+      //return this._stack[this._stack.length-1]._count;  //todo
+      var parent = this._stack[0];
+      var idx = (parent.left ? parent.left._count : 0);
+      for(let i = 1; i < this._stack.length; ++i){
+        var n = this._stack[i];
+        if(n === parent.left)
+          idx = idx - 1 - (n.right ? n.right._count : 0);
+        else if(n === parent.right)
+          idx = idx + 1 + (n.left ? n.left._count : 0);
+        else
+          throw new Error('wrong iterator');
+      }
+      return idx;
     }
     return
   },
@@ -950,7 +812,7 @@ iproto.update = function(value) {
       cstack[i] = new RBNode(n._color, n.value, n.left, cstack[i+1], n._count)
     }
   }
-  return new RedBlackTree(this.tree._compare, cstack[0])
+  return new RedBlackTree(cstack[0])
 }
 
 //Moves iterator backward one element
@@ -994,18 +856,7 @@ Object.defineProperty(iproto, "hasPrev", {
   }
 })
 
-//Default comparison function
-function defaultCompare(a, b) {
-  if(a < b) {
-    return -1
-  }
-  if(a > b) {
-    return 1
-  }
-  return 0
-}
-
 //Build a tree
-function createRBTree(compare) {
-  return new RedBlackTree(compare || defaultCompare, null)
+function createRBTree() {
+  return new RedBlackTree(null)
 }
