@@ -376,13 +376,13 @@ proto.at = function(idx) {
   return new RedBlackTreeIterator(this, [])
 }
 
-proto.ge = function(key) {
+proto.ge = function(idx) {
   var cmp = this._compare
   var n = this.root
   var stack = []
   var last_ptr = 0
   while(n) {
-    var d = cmp(key, n.key)
+    var d = idx - n._count;
     stack.push(n)
     if(d <= 0) {
       last_ptr = stack.length
@@ -397,13 +397,13 @@ proto.ge = function(key) {
   return new RedBlackTreeIterator(this, stack)
 }
 
-proto.gt = function(key) {
+proto.gt = function(idx) {
   var cmp = this._compare
   var n = this.root
   var stack = []
   var last_ptr = 0
   while(n) {
-    var d = cmp(key, n.key)
+    var d = idx - n._count;
     stack.push(n)
     if(d < 0) {
       last_ptr = stack.length
@@ -418,13 +418,13 @@ proto.gt = function(key) {
   return new RedBlackTreeIterator(this, stack)
 }
 
-proto.lt = function(key) {
+proto.lt = function(idx) {
   var cmp = this._compare
   var n = this.root
   var stack = []
   var last_ptr = 0
   while(n) {
-    var d = cmp(key, n.key)
+    var d = idx - n._count;
     stack.push(n)
     if(d > 0) {
       last_ptr = stack.length
@@ -439,13 +439,13 @@ proto.lt = function(key) {
   return new RedBlackTreeIterator(this, stack)
 }
 
-proto.le = function(key) {
+proto.le = function(idx) {
   var cmp = this._compare
   var n = this.root
   var stack = []
   var last_ptr = 0
   while(n) {
-    var d = cmp(key, n.key)
+    var d = idx - n._count;
     stack.push(n)
     if(d >= 0) {
       last_ptr = stack.length
@@ -461,12 +461,12 @@ proto.le = function(key) {
 }
 
 //Finds the item with key if it exists
-proto.find = function(key) {
+proto.find = function(idx) {
   var cmp = this._compare
   var n = this.root
   var stack = []
   while(n) {
-    var d = cmp(key, n.key)
+    var d = key - n._count;
     stack.push(n)
     if(d === 0) {
       return new RedBlackTreeIterator(this, stack)
@@ -481,8 +481,8 @@ proto.find = function(key) {
 }
 
 //Removes item with key from tree
-proto.remove = function(key) {
-  var iter = this.find(key)
+proto.remove = function(idx) {
+  var iter = this.find(idx)
   if(iter) {
     return iter.remove()
   }
@@ -490,11 +490,11 @@ proto.remove = function(key) {
 }
 
 //Returns the item at `key`
-proto.get = function(key) {
+proto.get = function(idx) {
   var cmp = this._compare
   var n = this.root
   while(n) {
-    var d = cmp(key, n.key)
+    var d = idx - n._count;
     if(d === 0) {
       return n.value
     }
@@ -540,7 +540,6 @@ iproto.clone = function() {
 
 //Swaps two nodes
 function swapNode(n, v) {
-  n.key = v.key
   n.value = v.value
   n.left = v.left
   n.right = v.right
@@ -750,13 +749,13 @@ iproto.remove = function() {
   //First copy path to node
   var cstack = new Array(stack.length)
   var n = stack[stack.length-1]
-  cstack[cstack.length-1] = new RBNode(n._color, n.key, n.value, n.left, n.right, n._count)
+  cstack[cstack.length-1] = new RBNode(n._color, n.value, n.left, n.right, n._count)
   for(var i=stack.length-2; i>=0; --i) {
     var n = stack[i]
     if(n.left === stack[i+1]) {
-      cstack[i] = new RBNode(n._color, n.key, n.value, cstack[i+1], n.right, n._count)
+      cstack[i] = new RBNode(n._color, n.value, cstack[i+1], n.right, n._count)
     } else {
-      cstack[i] = new RBNode(n._color, n.key, n.value, n.left, cstack[i+1], n._count)
+      cstack[i] = new RBNode(n._color, n.value, n.left, cstack[i+1], n._count)
     }
   }
 
@@ -777,14 +776,13 @@ iproto.remove = function() {
     }
     //Copy path to leaf
     var v = cstack[split-1]
-    cstack.push(new RBNode(n._color, v.key, v.value, n.left, n.right, n._count))
-    cstack[split-1].key = n.key
+    cstack.push(new RBNode(n._color, v.value, n.left, n.right, n._count))
     cstack[split-1].value = n.value
 
     //Fix up stack
     for(var i=cstack.length-2; i>=split; --i) {
       n = cstack[i]
-      cstack[i] = new RBNode(n._color, n.key, n.value, n.left, cstack[i+1], n._count)
+      cstack[i] = new RBNode(n._color, n.value, n.left, cstack[i+1], n._count)
     }
     cstack[split-1].left = cstack[split]
   }
@@ -845,10 +843,10 @@ iproto.remove = function() {
 }
 
 //Returns key
-Object.defineProperty(iproto, "key", {
+Object.defineProperty(iproto, "idx", {
   get: function() {
     if(this._stack.length > 0) {
-      return this._stack[this._stack.length-1].key
+      return this._stack[this._stack.length-1].idx  //todo
     }
     return
   },
@@ -943,13 +941,13 @@ iproto.update = function(value) {
   }
   var cstack = new Array(stack.length)
   var n = stack[stack.length-1]
-  cstack[cstack.length-1] = new RBNode(n._color, n.key, value, n.left, n.right, n._count)
+  cstack[cstack.length-1] = new RBNode(n._color, value, n.left, n.right, n._count)
   for(var i=stack.length-2; i>=0; --i) {
     n = stack[i]
     if(n.left === stack[i+1]) {
-      cstack[i] = new RBNode(n._color, n.key, n.value, cstack[i+1], n.right, n._count)
+      cstack[i] = new RBNode(n._color, n.value, cstack[i+1], n.right, n._count)
     } else {
-      cstack[i] = new RBNode(n._color, n.key, n.value, n.left, cstack[i+1], n._count)
+      cstack[i] = new RBNode(n._color, n.value, n.left, cstack[i+1], n._count)
     }
   }
   return new RedBlackTree(this.tree._compare, cstack[0])
