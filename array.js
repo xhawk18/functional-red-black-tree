@@ -1,6 +1,8 @@
 "use strict"
 
-module.exports = createRBTree
+module.exports = createRBArray
+
+let util = require('util');
 
 var RED   = 0
 var BLACK = 1
@@ -50,6 +52,36 @@ Object.defineProperty(proto, "length", {
     return 0
   }
 })
+
+//Dump the tree
+proto.dump = function() {
+  let layers = [];
+  function dump(layer, n) {
+      if(!n) return;
+      
+      if(layers[layer] === undefined)
+          layers[layer] = [];
+      layers[layer].push(n);
+      
+      dump(layer + 1, n.left);
+      dump(layer + 1, n.right);
+  }
+  dump(0, this.root);
+  
+  for(let i = 0; i < layers.length; ++i) {
+      let layer = layers[i];
+      
+      let s = '';
+      for(let j = 0; j < layer.length; ++j) {
+        s += `[${layer[j]._count}]=${layer[j].value} `;
+      }
+      console.log(s);
+  }
+
+
+}
+
+
 
 //Insert a new item into the tree
 proto.insert = function(idx, value) {
@@ -233,7 +265,9 @@ function doVisitFull(visit, node) {
 
 //Visit half nodes in order
 function doVisitHalf(left_count, lo, visit, node) {
-  var l = lo - node._count;
+  var l = lo - (node.left ? node.left._count : 0) - left_count;
+  console.log('visit', `[${node.value}]`, l, lo, node._count, left_count);
+
   if(l <= 0) {
     if(node.left) {
       var v = doVisitHalf(left_count, lo, visit, node.left)
@@ -249,8 +283,10 @@ function doVisitHalf(left_count, lo, visit, node) {
 
 //Visit all nodes within a range
 function doVisit(left_count, lo, hi, visit, node) {
-  var l = lo - node._count - left_count;
-  var h = hi - node._count - left_count;
+  var l = lo - (node.left ? node.left._count : 0) - left_count;
+  var h = hi - (node.left ? node.left._count : 0) - left_count;
+  //console.log('visit', `[${node.value}]`, l, h, lo, hi, node._count, left_count);
+
   var v
   if(l <= 0) {
     if(node.left) {
@@ -278,10 +314,14 @@ proto.forEach = function rbTreeForEach(visit, lo, hi) {
     break
 
     case 2:
+      if(lo === undefined)
+        return this.forEach(visit);
       return doVisitHalf(0, lo, visit, this.root)
     break
 
     case 3:
+      if(hi === undefined)
+        return this.forEach(visit, lo);
       if(lo >= hi) {
         return
       }
@@ -856,7 +896,89 @@ Object.defineProperty(iproto, "hasPrev", {
   }
 })
 
-//Build a tree
-function createRBTree() {
-  return new RedBlackTree(null)
+function RBArray() {
+  this.tree = new RedBlackTree(null);
 }
+
+RBArray.prototype.inspect = function(){
+  let arr = [];
+  this.tree.forEach(function(value){
+    arr.push(value);
+  });
+  return util.inspect(arr);
+}
+
+RBArray.prototype.pop = function(){
+  let itr = this.tree.end;
+  if(itr.valid){
+    this.tree = itr.remove();
+    return itr.value;
+  }
+}
+
+RBArray.prototype.push = function(...elements){
+  let start = this.tree.length;
+  for(let item of elements){
+    this.tree = this.tree.insert(start++, item);
+  }
+  return start;
+}
+
+RBArray.prototype.shift = function(){
+  let itr = this.tree.begin;
+  if(itr.valid){
+    this.tree = itr.remove();
+    return itr.value;
+  }
+}
+
+RBArray.prototype.slice = function(begin, end){
+  //if(begin === undefined) begin = 0;
+  //if(end === undefined) end = this.tree.length;
+
+  let ret = new RBArray();
+  this.tree.forEach(function(value){
+    ret.push(value);
+  }, begin, end);
+  return ret;
+}
+
+RBArray.prototype.splice = function(start, deleteCount, ...items){
+  if(deleteCount === undefined)
+    deleteCount = this.tree.length - start;
+  else
+    deleteCount = Math.min(deleteCount, this.tree.length - start);
+
+  let ret = new RBArray();
+  for(let i = 0; i < deleteCount; ++i) {
+    let itr = this.tree.at(start);
+    if(!itr.valid) break;
+    ret.push(itr.value);
+    this.tree = itr.remove();
+  }
+
+  for(let item of items){
+    this.tree = this.tree.insert(start++, item);
+  }
+
+  return ret;
+}
+
+RBArray.prototype.at = function(idx){
+  return this.tree.at(idx).value;
+}
+
+//Returns the number of nodes in the tree
+Object.defineProperty(RBArray.prototype, "length", {
+  get: function() {
+    return this.tree.length;
+  }
+});
+
+
+//Build a tree
+function createRBArray() {
+  let array = new RBArray();
+  return array;
+}
+
